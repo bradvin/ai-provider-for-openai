@@ -56,11 +56,13 @@
         "lint": [
             "@phpcs",
             "@phpstan",
-            "@test"
+            "@test",
+            "@test:js"
         ],
         "phpcbf": "phpcbf",
         "phpcs": "phpcs",
         "phpstan": "phpstan analyze --memory-limit=256M",
-        "test": "@php tests/run.php"
+        "test": "@php tests/run.php",
+        "test:js": "node --no-warnings --experimental-vm-modules tests/check-connector-module.mjs"
     }
 }

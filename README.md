@@ -66,11 +66,29 @@ Available models are dynamically discovered from the OpenAI API. This includes G
 
 ## Configuration
 
-The provider uses the `OPENAI_API_KEY` environment variable for authentication. You can set this in your environment or via PHP:
+### API key
+
+The provider supports an OpenAI Platform API key from the WordPress Connectors screen or the `OPENAI_API_KEY` environment variable. You can set the environment variable via PHP:
 
 ```php
 putenv('OPENAI_API_KEY=your-api-key');
 ```
+
+API-key authentication uses the public `api.openai.com` API and supports all of this provider's text and image capabilities.
+
+### OpenAI account (experimental)
+
+On WordPress 7.0 and later, open **Settings > Connectors > OpenAI**, choose **OpenAI account (experimental)**, and select **Connect with OpenAI**. The plugin opens OpenAI's device verification page in a new tab, shows the one-time code, and completes the connection after you approve it.
+
+This is the device authorization flow used by Codex clients. It uses the separate ChatGPT Codex backend and is not a replacement for OpenAI Platform API access. Account mode currently supports text generation and image inputs, but not image generation. The upstream endpoints and behavior are experimental and may change without notice.
+
+OAuth access and refresh tokens are encrypted before they are stored in the WordPress database. Disconnecting the account removes them.
+
+## External services
+
+This plugin connects to OpenAI services. API-key mode sends model requests and prompt content to `api.openai.com`. When an administrator starts OpenAI account authentication, the plugin sends a Codex client identifier to `auth.openai.com`, polls the device authorization status, exchanges the approved code for tokens, and later refreshes those tokens. Account-mode model requests and prompt content are sent to `chatgpt.com/backend-api/codex`.
+
+Review OpenAI's [Terms of Use](https://openai.com/policies/terms-of-use/), [Services Agreement](https://openai.com/policies/services-agreement/), and [Privacy Policy](https://openai.com/policies/privacy-policy/) before connecting.
 
 ## Extending OpenAI API profiles
 

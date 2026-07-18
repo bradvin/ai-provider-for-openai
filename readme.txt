@@ -21,6 +21,7 @@ This plugin provides OpenAI integration for the PHP AI Client SDK. It enables Wo
 * Function calling support
 * Web search support
 * Automatic provider registration
+* API key or experimental OpenAI account authentication
 
 Available models are dynamically discovered from the OpenAI API, including GPT models for text generation, DALL-E and GPT Image models for image generation, and TTS models for text-to-speech.
 
@@ -29,13 +30,35 @@ Available models are dynamically discovered from the OpenAI API, including GPT m
 * PHP 7.4 or higher
 * For WordPress 6.9, the [wordpress/php-ai-client](https://github.com/WordPress/php-ai-client) package must be installed
 * For WordPress 7.0 and above, no additional changes are required
-* OpenAI API key
+* An OpenAI API key, or an OpenAI account for the experimental account flow
 
 == Installation ==
 
 1. Upload the plugin files to `/wp-content/plugins/ai-provider-for-openai/`
 2. Activate the plugin through the 'Plugins' menu in WordPress
-3. Configure your OpenAI API key via the `OPENAI_API_KEY` environment variable or constant
+3. On WordPress 7.0 and later, open Settings > Connectors > OpenAI and configure an API key or connect an OpenAI account. On WordPress 6.9, configure `OPENAI_API_KEY` as an environment variable or constant.
+
+== Authentication ==
+
+= API key =
+
+API-key authentication uses the public OpenAI Platform API and supports all text and image capabilities provided by this plugin. Configure a key in Settings > Connectors, or use the `OPENAI_API_KEY` environment variable or constant.
+
+= OpenAI account (experimental) =
+
+On WordPress 7.0 and later, choose "OpenAI account (experimental)" in the OpenAI connector and click "Connect with OpenAI." The plugin opens OpenAI's device verification page in a new tab and displays the one-time code to approve.
+
+This is the device authorization flow used by Codex clients. It uses the separate ChatGPT Codex backend and is not a replacement for OpenAI Platform API access. Account mode currently supports text generation and image inputs, but not image generation. The upstream endpoints and behavior are experimental and may change without notice.
+
+OAuth access and refresh tokens are encrypted before storage in the WordPress database. Disconnecting the account removes them.
+
+== External services ==
+
+This plugin connects to OpenAI services. API-key mode sends model requests and prompt content to api.openai.com.
+
+When an administrator starts OpenAI account authentication, the plugin sends a Codex client identifier to auth.openai.com, polls device authorization status, exchanges the approved code for tokens, and later refreshes those tokens. Account-mode model requests and prompt content are sent to chatgpt.com/backend-api/codex.
+
+This service is provided by OpenAI: [Terms of Use](https://openai.com/policies/terms-of-use/), [Services Agreement](https://openai.com/policies/services-agreement/), and [Privacy Policy](https://openai.com/policies/privacy-policy/).
 
 == Frequently Asked Questions ==
 
@@ -48,6 +71,12 @@ Visit the [OpenAI Platform](https://platform.openai.com/) to create an account a
 No, this plugin requires the PHP AI Client plugin to be installed and activated. It provides the OpenAI-specific implementation that the PHP AI Client uses.
 
 == Changelog ==
+
+= 1.1.0 =
+
+* Add experimental OpenAI account authentication using the Codex device authorization flow.
+* Keep API-key authentication available as a separate option in Settings > Connectors.
+* Encrypt account access and refresh tokens at rest and add account disconnect support.
 
 = 1.0.3 =
 
