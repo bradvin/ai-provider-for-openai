@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WordPress\OpenAiAiProvider\Metadata;
 
+use Throwable;
 use WordPress\AiClient\Files\Enums\FileTypeEnum;
 use WordPress\AiClient\Files\Enums\MediaOrientationEnum;
 use WordPress\AiClient\Messages\Enums\ModalityEnum;
@@ -16,6 +17,7 @@ use WordPress\AiClient\Providers\Models\DTO\SupportedOption;
 use WordPress\AiClient\Providers\Models\Enums\CapabilityEnum;
 use WordPress\AiClient\Providers\Models\Enums\OptionEnum;
 use WordPress\AiClient\Providers\OpenAiCompatibleImplementation\AbstractOpenAiCompatibleModelMetadataDirectory;
+use WordPress\OpenAiAiProvider\Authentication\OpenAiOAuthRequestAuthentication;
 use WordPress\OpenAiAiProvider\Provider\OpenAiProvider;
 
 /**
@@ -25,6 +27,15 @@ use WordPress\OpenAiAiProvider\Provider\OpenAiProvider;
  *
  * @phpstan-type ModelsResponseData array{
  *     data: list<array{id: string}>
+ * }
+ * @phpstan-type CodexModelData array{
+ *     slug?: mixed,
+ *     display_name?: mixed,
+ *     visibility?: mixed,
+ *     priority?: mixed
+ * }
+ * @phpstan-type CodexModelsResponseData array{
+ *     models: list<CodexModelData>
  * }
  */
 class OpenAiModelMetadataDirectory extends AbstractOpenAiCompatibleModelMetadataDirectory
@@ -36,9 +47,18 @@ class OpenAiModelMetadataDirectory extends AbstractOpenAiCompatibleModelMetadata
      */
     protected function createRequest(HttpMethodEnum $method, string $path, array $headers = [], $data = null): Request
     {
+        $authentication = $this->getRequestAuthentication();
+        if (
+            $authentication instanceof OpenAiOAuthRequestAuthentication
+            && $method === HttpMethodEnum::GET()
+            && trim($path, '/') === 'models'
+        ) {
+            $data = ['client_version' => '1.0.0'];
+        }
+
         return new Request(
             $method,
-            OpenAiProvider::url($path),
+            OpenAiProvider::requestUrl($path, $authentication),
             $headers,
             $data
         );
@@ -51,6 +71,10 @@ class OpenAiModelMetadataDirectory extends AbstractOpenAiCompatibleModelMetadata
      */
     protected function parseResponseToModelMetadataList(Response $response): array
     {
+        if ($this->getRequestAuthentication() instanceof OpenAiOAuthRequestAuthentication) {
+            return $this->parseCodexModelsResponse($response);
+        }
+
         /** @var ModelsResponseData $responseData */
         $responseData = $response->getData();
         if (!isset($responseData['data']) || !$responseData['data']) {
@@ -285,6 +309,129 @@ class OpenAiModelMetadataDirectory extends AbstractOpenAiCompatibleModelMetadata
         usort($models, [$this, 'modelSortCallback']);
 
         return $models;
+    }
+
+    /**
+     * Separates public API and per-account model catalogs in the SDK cache.
+     *
+     * @since 1.1.0
+     *
+     * @return string The cache key prefix.
+     */
+    protected function getBaseCacheKey(): string
+    {
+        try {
+            $authentication = $this->getRequestAuthentication();
+            $authenticationKey = $authentication instanceof OpenAiOAuthRequestAuthentication
+                ? $authentication->getCacheKeySuffix()
+                : 'api_key';
+        } catch (Throwable $throwable) {
+            $authenticationKey = 'unconfigured';
+        }
+
+        return parent::getBaseCacheKey() . '_metadata_v3_' . $authenticationKey;
+    }
+
+    /**
+     * Parses the model catalog returned by the OAuth-backed Codex endpoint.
+     *
+     * @since 1.1.0
+     *
+     * @param Response $response The models response.
+     * @return list<ModelMetadata> The available text-generation models.
+     */
+    private function parseCodexModelsResponse(Response $response): array
+    {
+        /** @var CodexModelsResponseData|null $responseData */
+        $responseData = $response->getData();
+        if (!isset($responseData['models']) || !is_array($responseData['models'])) {
+            throw ResponseException::fromMissingData('OpenAI', 'models');
+        }
+
+        $capabilities = [
+            CapabilityEnum::textGeneration(),
+            CapabilityEnum::chatHistory(),
+        ];
+        $options = [
+            new SupportedOption(OptionEnum::systemInstruction()),
+            new SupportedOption(OptionEnum::maxTokens()),
+            new SupportedOption(OptionEnum::temperature()),
+            new SupportedOption(OptionEnum::topP()),
+            new SupportedOption(OptionEnum::outputMimeType(), ['text/plain', 'application/json']),
+            new SupportedOption(OptionEnum::outputSchema()),
+            new SupportedOption(OptionEnum::functionDeclarations()),
+            new SupportedOption(OptionEnum::webSearch()),
+            new SupportedOption(OptionEnum::customOptions()),
+            new SupportedOption(
+                OptionEnum::inputModalities(),
+                [
+                    [ModalityEnum::text()],
+                    [ModalityEnum::text(), ModalityEnum::image()],
+                ]
+            ),
+            new SupportedOption(OptionEnum::outputModalities(), [[ModalityEnum::text()]]),
+        ];
+
+        $sortableModels = [];
+        foreach ($responseData['models'] as $modelData) {
+            if (!is_array($modelData)) {
+                continue;
+            }
+
+            $slug = $modelData['slug'] ?? null;
+            if (!is_string($slug) || trim($slug) === '') {
+                continue;
+            }
+
+            $visibility = $modelData['visibility'] ?? '';
+            if (
+                is_string($visibility)
+                && in_array(strtolower(trim($visibility)), ['hide', 'hidden'], true)
+            ) {
+                continue;
+            }
+
+            $displayName = $modelData['display_name'] ?? $slug;
+            if (!is_string($displayName) || trim($displayName) === '') {
+                $displayName = $slug;
+            }
+            $priority = $modelData['priority'] ?? PHP_INT_MAX;
+            if (!is_int($priority) && !is_float($priority)) {
+                $priority = PHP_INT_MAX;
+            }
+
+            $sortableModels[] = [
+                'metadata' => new ModelMetadata(
+                    trim($slug),
+                    trim($displayName),
+                    $capabilities,
+                    $options
+                ),
+                'priority' => (int) $priority,
+            ];
+        }
+
+        usort(
+            $sortableModels,
+            static function (array $a, array $b): int {
+                if ($a['priority'] === $b['priority']) {
+                    return strcmp(
+                        $a['metadata']->getId(),
+                        $b['metadata']->getId()
+                    );
+                }
+                return $a['priority'] <=> $b['priority'];
+            }
+        );
+
+        return array_values(
+            array_map(
+                static function (array $model): ModelMetadata {
+                    return $model['metadata'];
+                },
+                $sortableModels
+            )
+        );
     }
 
     /**

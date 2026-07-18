@@ -12,6 +12,7 @@ use WordPress\AiClient\Messages\DTO\MessagePart;
 use WordPress\AiClient\Messages\Enums\MessageRoleEnum;
 use WordPress\AiClient\Providers\ApiBasedImplementation\AbstractApiBasedModel;
 use WordPress\AiClient\Providers\Http\DTO\Request;
+use WordPress\AiClient\Providers\Http\DTO\RequestOptions;
 use WordPress\AiClient\Providers\Http\DTO\Response;
 use WordPress\AiClient\Providers\Http\Enums\HttpMethodEnum;
 use WordPress\AiClient\Providers\Http\Exception\ResponseException;
@@ -24,6 +25,7 @@ use WordPress\AiClient\Results\Enums\FinishReasonEnum;
 use WordPress\AiClient\Tools\DTO\FunctionCall;
 use WordPress\AiClient\Tools\DTO\FunctionDeclaration;
 use WordPress\AiClient\Tools\DTO\WebSearch;
+use WordPress\OpenAiAiProvider\Authentication\OpenAiOAuthRequestAuthentication;
 use WordPress\OpenAiAiProvider\Provider\OpenAiProvider;
 
 /**
@@ -70,23 +72,36 @@ class OpenAiTextGenerationModel extends AbstractApiBasedModel implements TextGen
     final public function generateTextResult(array $prompt): GenerativeAiResult
     {
         $httpTransporter = $this->getHttpTransporter();
+        $authentication = $this->getRequestAuthentication();
+        $isOAuthRequest = $authentication instanceof OpenAiOAuthRequestAuthentication;
 
         $params = $this->prepareGenerateTextParams($prompt);
+        $requestOptions = $this->getRequestOptions();
+        if ($isOAuthRequest && ($requestOptions === null || $requestOptions->getTimeout() === null)) {
+            $requestOptions = $requestOptions === null ? new RequestOptions() : clone $requestOptions;
+            $requestOptions->setTimeout(120.0);
+        }
 
         $request = new Request(
             HttpMethodEnum::POST(),
-            OpenAiProvider::url('responses'),
-            ['Content-Type' => 'application/json'],
+            OpenAiProvider::requestUrl('responses', $authentication),
+            [
+                'Accept' => $isOAuthRequest ? 'text/event-stream' : 'application/json',
+                'Content-Type' => 'application/json',
+            ],
             $params,
-            $this->getRequestOptions()
+            $requestOptions
         );
 
         // Add authentication credentials to the request.
-        $request = $this->getRequestAuthentication()->authenticateRequest($request);
+        $request = $authentication->authenticateRequest($request);
 
         // Send and process the request.
         $response = $httpTransporter->send($request);
         ResponseUtil::throwIfNotSuccessful($response);
+        if ($isOAuthRequest) {
+            $response = OpenAiCodexStreamResponseParser::parse($response);
+        }
         return $this->parseResponseToGenerativeAiResult($response);
     }
 
@@ -168,6 +183,28 @@ class OpenAiTextGenerationModel extends AbstractApiBasedModel implements TextGen
                 );
             }
             $params[$key] = $value;
+        }
+
+        if ($this->getRequestAuthentication() instanceof OpenAiOAuthRequestAuthentication) {
+            /*
+             * The account-backed Codex endpoint requires streaming and does
+             * not accept several public Responses API sampling parameters.
+             */
+            unset(
+                $params['max_output_tokens'],
+                $params['temperature'],
+                $params['top_p']
+            );
+            $params['instructions'] = $params['instructions'] ?? 'You are a helpful assistant.';
+            $params['store'] = false;
+            $params['stream'] = true;
+            if (!empty($params['tools']) && is_array($params['tools'])) {
+                /** @var list<array<string, mixed>> $tools */
+                $tools = $params['tools'];
+                $params['tools'] = OpenAiCodexToolSchemaSanitizer::sanitize($tools);
+                $params['tool_choice'] = 'auto';
+                $params['parallel_tool_calls'] = true;
+            }
         }
 
         return $params;

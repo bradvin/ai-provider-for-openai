@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WordPress\OpenAiAiProvider\Models;
 
 use WordPress\AiClient\Common\Exception\InvalidArgumentException;
+use WordPress\AiClient\Common\Exception\RuntimeException;
 use WordPress\AiClient\Files\DTO\File;
 use WordPress\AiClient\Files\Enums\MediaOrientationEnum;
 use WordPress\AiClient\Messages\DTO\Message;
@@ -12,6 +13,7 @@ use WordPress\AiClient\Providers\Http\DTO\Request;
 use WordPress\AiClient\Providers\Http\Enums\HttpMethodEnum;
 use WordPress\AiClient\Providers\OpenAiCompatibleImplementation\AbstractOpenAiCompatibleImageGenerationModel;
 use WordPress\AiClient\Results\DTO\GenerativeAiResult;
+use WordPress\OpenAiAiProvider\Authentication\OpenAiOAuthRequestAuthentication;
 use WordPress\OpenAiAiProvider\Provider\OpenAiProvider;
 
 /**
@@ -42,6 +44,12 @@ class OpenAiImageGenerationModel extends AbstractOpenAiCompatibleImageGeneration
      */
     public function generateImageResult(array $prompt): GenerativeAiResult
     {
+        if ($this->getRequestAuthentication() instanceof OpenAiOAuthRequestAuthentication) {
+            throw new RuntimeException(
+                'Image generation is not available with OpenAI account authentication. Use an API key instead.'
+            );
+        }
+
         if ($this->promptContainsImage($prompt)) {
             return $this->generateImageEditResult($prompt);
         }

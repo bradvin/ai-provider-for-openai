@@ -1,0 +1,61 @@
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__settings {
+	border-top: 1px solid #ddd;
+	padding-top: 16px;
+}
+
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__connected-badge {
+	background: #eff8f0;
+	border-radius: 2px;
+	color: #345b37;
+	font-size: 13px;
+	font-weight: 600;
+	padding: 4px 12px;
+	white-space: nowrap;
+}
+
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__method-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	max-width: 640px;
+}
+
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__method-description,
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__method-panel > p {
+	margin: 0;
+}
+
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__section-title {
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.4;
+	margin: 0;
+}
+
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__code-row {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__user-code {
+	background: #f6f7f7;
+	border: 1px solid #c3c4c7;
+	border-radius: 2px;
+	font-size: 18px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	line-height: 1.5;
+	padding: 8px 12px;
+	user-select: all;
+}
+
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__verification-link,
+.ai-provider-for-openai-oauth .ai-provider-for-openai-oauth__expires {
+	margin: 0;
+}
+
+.ai-provider-for-openai-oauth .components-notice {
+	margin: 0;
+}

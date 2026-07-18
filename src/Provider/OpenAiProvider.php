@@ -12,9 +12,12 @@ use WordPress\AiClient\Providers\Contracts\ModelMetadataDirectoryInterface;
 use WordPress\AiClient\Providers\Contracts\ProviderAvailabilityInterface;
 use WordPress\AiClient\Providers\DTO\ProviderMetadata;
 use WordPress\AiClient\Providers\Enums\ProviderTypeEnum;
+use WordPress\AiClient\Providers\Http\Contracts\RequestAuthenticationInterface;
 use WordPress\AiClient\Providers\Http\Enums\RequestAuthenticationMethod;
 use WordPress\AiClient\Providers\Models\Contracts\ModelInterface;
 use WordPress\AiClient\Providers\Models\DTO\ModelMetadata;
+use WordPress\OpenAiAiProvider\Authentication\OAuthConfig;
+use WordPress\OpenAiAiProvider\Authentication\OpenAiOAuthRequestAuthentication;
 use WordPress\OpenAiAiProvider\Metadata\OpenAiModelMetadataDirectory;
 use WordPress\OpenAiAiProvider\Models\OpenAiImageGenerationModel;
 use WordPress\OpenAiAiProvider\Models\OpenAiTextGenerationModel;
@@ -26,6 +29,29 @@ use WordPress\OpenAiAiProvider\Models\OpenAiTextGenerationModel;
  */
 class OpenAiProvider extends AbstractApiProvider
 {
+    /**
+     * Constructs the correct endpoint URL for an authentication mode.
+     *
+     * API keys continue to use the public OpenAI API. OpenAI account
+     * authentication is scoped to the separate Codex backend.
+     *
+     * @since 1.1.0
+     *
+     * @param string $path The endpoint path.
+     * @param RequestAuthenticationInterface $authentication The request authentication.
+     * @return string The complete endpoint URL.
+     */
+    public static function requestUrl(
+        string $path,
+        RequestAuthenticationInterface $authentication
+    ): string {
+        if ($authentication instanceof OpenAiOAuthRequestAuthentication) {
+            return OAuthConfig::codexApiBaseUrl() . '/' . ltrim($path, '/');
+        }
+
+        return static::url($path);
+    }
+
     /**
      * {@inheritDoc}
      *
